@@ -66,6 +66,7 @@ public class KeyHandler {
 
     private static final int GESTURE_REQUEST = 1;
     private static final int GESTURE_WAKE_LOCK_DURATION = 250; // ms
+    private static final int PROXIMITY_WAKE_LOCK_DURATION = 1000; // ms
 
     private static final int MAX_SUPPORTED_GESTURES = 15;
 
@@ -658,7 +659,14 @@ public class KeyHandler {
         // If it's held, means we just processed a gesture or we are in the middle of one
         if (isKeySupportedAndEnabled && !mGestureWakeLock.isHeld()) {
             Message msg = getMessageForKeyEvent(event);
-            if (mProximitySensor != null) {
+            // AOSP wakes directly on KEYCODE_WAKEUP. Don't gate the double-tap
+            // wake gesture behind a proximity check: on devices whose proximity
+            // sensor is slow or power hungry (e.g. alioth's ultrasound/MIUS
+            // sensor) it adds hundreds of milliseconds to every wake and starts
+            // the audio DSP just to turn the screen on.
+            final boolean isWakeGesture = scanCode == mDoubleTapKeyCode
+                    && mGestures.get(scanCode) == WAKE_UP;
+            if (mProximitySensor != null && !isWakeGesture) {
                 mHandler.sendMessageDelayed(msg, 250 /* proximity timeout */);
                 processEvent(event);
             } else {
@@ -681,7 +689,7 @@ public class KeyHandler {
     }
 
     private void processEvent(final KeyEvent keyEvent) {
-        mProximityWakeLock.acquire();
+        mProximityWakeLock.acquire(PROXIMITY_WAKE_LOCK_DURATION);
         mSensorManager.registerListener(new SensorEventListener() {
             @Override
             public void onSensorChanged(SensorEvent event) {
