@@ -22,6 +22,7 @@
 
 package com.android.systemui.statusbar.pipeline.mobile.domain.interactor
 import android.content.Context
+import android.provider.Settings
 import android.telephony.ims.stub.ImsRegistrationImplBase.REGISTRATION_TECH_CROSS_SIM
 import android.telephony.ims.stub.ImsRegistrationImplBase.REGISTRATION_TECH_IWLAN
 import android.telephony.TelephonyDisplayInfo
@@ -31,6 +32,7 @@ import com.android.settingslib.graph.SignalDrawable
 import com.android.settingslib.mobile.MobileIconCarrierIdOverrides
 import com.android.settingslib.mobile.MobileIconCarrierIdOverridesImpl
 import com.android.settingslib.mobile.MobileMappings
+import com.android.systemui.Dependency
 import com.android.systemui.dagger.qualifiers.Background
 import com.android.systemui.log.table.TableLogBuffer
 import com.android.systemui.log.table.logDiffsForTable
@@ -50,8 +52,11 @@ import com.android.systemui.statusbar.pipeline.satellite.ui.model.SatelliteIconM
 import com.android.systemui.statusbar.pipeline.shared.data.model.DataActivityModel
 import com.android.systemui.statusbar.policy.FiveGServiceClient
 import com.android.systemui.statusbar.policy.FiveGServiceClient.FiveGServiceState
+import com.android.systemui.tuner.TunerService
 import com.android.systemui.util.CarrierNameCustomization
+import com.android.systemui.utils.coroutines.flow.conflatedCallbackFlow
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -557,6 +562,28 @@ class MobileIconInteractorImpl(
 
     override val isEmergencyOnly: StateFlow<Boolean> = connectionRepository.isEmergencyOnly
     override val isAllowedDuringAirplaneMode = connectionRepository.isAllowedDuringAirplaneMode
+
+    private val dataDisabledIconKey: String =
+        "system:" + Settings.System.DATA_DISABLED_ICON
+
+    private val dataDisabledIcon: StateFlow<Boolean> =
+        conflatedCallbackFlow {
+                val callback =
+                    object : TunerService.Tunable {
+                        override fun onTuningChanged(key: String, newValue: String?) {
+                            if (key == dataDisabledIconKey) {
+                                trySend(TunerService.parseIntegerSwitch(newValue, true))
+                            }
+                        }
+                    }
+                Dependency.get(TunerService::class.java)
+                    .addTunable(callback, dataDisabledIconKey)
+                awaitClose {
+                    Dependency.get(TunerService::class.java).removeTunable(callback)
+                }
+            }
+            .stateIn(scope, SharingStarted.WhileSubscribed(), true)
+
     /** Whether or not to show the error state of [SignalDrawable] for cellular connections */
     private val showExclamationMarkForCellular: StateFlow<Boolean> =
         combine(
@@ -564,11 +591,17 @@ class MobileIconInteractorImpl(
                 isDataConnected,
                 isConnectionFailed,
                 isInService,
-                hideNoInternetState
-            ) { isDataEnabled, isDataConnected, isConnectionFailed, isInService,
-                        hideNoInternetState ->
-                !hideNoInternetState && (!isDataEnabled || (isDataConnected && isConnectionFailed)
-                        || !isInService)
+                hideNoInternetState,
+                dataDisabledIcon
+            ) { values ->
+                val dataEnabled = values[0]
+                val dataConnected = values[1]
+                val connectionFailed = values[2]
+                val inService = values[3]
+                val hideNoInternet = values[4]
+                val showDataDisabledIcon = values[5]
+                !hideNoInternet && ((!dataEnabled && showDataDisabledIcon)
+                        || (dataConnected && connectionFailed) || !inService)
             }
             .stateIn(scope, SharingStarted.WhileSubscribed(), true)
 

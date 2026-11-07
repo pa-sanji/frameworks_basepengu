@@ -33,6 +33,7 @@ import android.net.NetworkRequest;
 import android.net.TelephonyNetworkSpecifier;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.provider.Settings.Global;
 import android.telephony.CellSignalStrength;
 import android.telephony.CellSignalStrengthCdma;
@@ -58,12 +59,14 @@ import com.android.settingslib.mobile.MobileStatusTracker.MobileStatus;
 import com.android.settingslib.mobile.MobileStatusTracker.SubscriptionDefaults;
 import com.android.settingslib.mobile.TelephonyIcons;
 import com.android.settingslib.net.SignalStrengthUtil;
+import com.android.systemui.Dependency;
 import com.android.systemui.res.R;
 import com.android.systemui.statusbar.pipeline.mobile.domain.interactor.MobileIconsInteractor;
 import com.android.systemui.statusbar.pipeline.mobile.util.MobileMappingsProxy;
 import com.android.systemui.statusbar.policy.FiveGServiceClient;
 import com.android.systemui.statusbar.policy.FiveGServiceClient.FiveGServiceState;
 import com.android.systemui.statusbar.policy.FiveGServiceClient.IFiveGStateListener;
+import com.android.systemui.tuner.TunerService;
 import com.android.systemui.util.CarrierConfigTracker;
 
 import java.io.PrintWriter;
@@ -78,9 +81,12 @@ import java.util.Map;
  * @deprecated Use {@link MobileIconsInteractor} instead.
  */
 @Deprecated
-public class MobileSignalController extends SignalController<MobileState, MobileIconGroup> {
+public class MobileSignalController extends SignalController<MobileState, MobileIconGroup>
+        implements TunerService.Tunable {
     private static final SimpleDateFormat SSDF = new SimpleDateFormat("MM-dd HH:mm:ss.SSS");
     private static final int STATUS_HISTORY_SIZE = 64;
+    private static final String DATA_DISABLED_ICON =
+            "system:" + Settings.System.DATA_DISABLED_ICON;
     private final TelephonyManager mPhone;
     private final CarrierConfigTracker mCarrierConfigTracker;
     private final ImsMmTelManager mImsMmTelManager;
@@ -95,6 +101,8 @@ public class MobileSignalController extends SignalController<MobileState, Mobile
 
     private MobileIconGroup mDefaultIcons;
     private Config mConfig;
+    private boolean mDataDisabledIcon = true;
+    private final TunerService mTunerService;
     @VisibleForTesting
     boolean mInflateSignalStrengths = false;
     @VisibleForTesting
@@ -208,6 +216,7 @@ public class MobileSignalController extends SignalController<MobileState, Mobile
                     !nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
             }
         };
+        mTunerService = Dependency.get(TunerService.class);
     }
 
     void setConfiguration(Config config) {
@@ -216,6 +225,14 @@ public class MobileSignalController extends SignalController<MobileState, Mobile
         mNetworkToIconLookup = mMobileMappingsProxy.mapIconSets(mConfig);
         mDefaultIcons = mMobileMappingsProxy.getDefaultIcons(mConfig);
         updateTelephony();
+    }
+
+    @Override
+    public void onTuningChanged(String key, String newValue) {
+        if (DATA_DISABLED_ICON.equals(key)) {
+            mDataDisabledIcon = TunerService.parseIntegerSwitch(newValue, true);
+            updateTelephony();
+        }
     }
 
     void setAirplaneMode(boolean airplaneMode) {
@@ -277,12 +294,14 @@ public class MobileSignalController extends SignalController<MobileState, Mobile
         builder.setNetworkSpecifier(specifier);
         final NetworkRequest request = builder.build();
         mConnectivityManager.registerNetworkCallback(request, mNetworkCallback);
+        mTunerService.addTunable(this, DATA_DISABLED_ICON);
     }
 
     /**
      * Stop listening for phone state changes.
      */
     public void unregisterListener() {
+        mTunerService.removeTunable(this);
         mMobileStatusTracker.setListening(false);
         mContext.getContentResolver().unregisterContentObserver(mObserver);
         mContext.unregisterReceiver(mVolteSwitchObserver);
@@ -682,7 +701,7 @@ public class MobileSignalController extends SignalController<MobileState, Mobile
         mCurrentState.roaming = isRoaming();
         if (isCarrierNetworkChangeActive()) {
             mCurrentState.iconGroup = TelephonyIcons.CARRIER_NETWORK_CHANGE;
-        } else if (isDataDisabled() && !mConfig.alwaysShowDataRatIcon) {
+        } else if (isDataDisabled() && !mConfig.alwaysShowDataRatIcon && mDataDisabledIcon) {
             if (mSubscriptionInfo.getSubscriptionId() != mDefaults.getDefaultDataSubId()) {
                 mCurrentState.iconGroup = TelephonyIcons.NOT_DEFAULT_DATA;
             } else {
