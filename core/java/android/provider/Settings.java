@@ -6958,6 +6958,12 @@ public final class Settings {
                 "status_bar_shade_split_percentage";
 
         /**
+         * Whether to display the data disabled indicator icon.
+         * @hide
+         */
+        public static final String DATA_DISABLED_ICON = "data_disabled_icon";
+
+        /**
          * Whether or not to enable multiple audio focus.
          * When enabled, requires more management by user over application playback activity,
          * for instance pausing media apps when another starts.
