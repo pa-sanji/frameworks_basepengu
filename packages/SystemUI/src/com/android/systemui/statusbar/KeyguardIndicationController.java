@@ -1399,6 +1399,63 @@ public class KeyguardIndicationController {
         return computePowerChargingStringIndication();
     }
 
+    /**
+     * Use the real battery current/voltage for the lock screen charging info.
+     *
+     * <p>The HealthInfo {@code maxChargingCurrent}/{@code maxChargingVoltage} values are the
+     * adapter limits, not the values actually flowing into the battery. On this device they are
+     * 100 mA / 12 V until the charger is fully negotiated, which made the lock screen show
+     * "100 mA · 1.2 W · 12.0 V" even while the phone was charging normally.
+     */
+    private void updateChargingValuesFromBattery(BatteryStatus status) {
+        mChargingCurrent = status.maxChargingCurrent;
+        mChargingVoltage = status.maxChargingVoltage;
+        mChargingWattage = status.maxChargingWattage;
+
+        if (!status.isPluggedIn()) {
+            return;
+        }
+
+        BatteryManager batteryManager = mContext.getSystemService(BatteryManager.class);
+        int currentUa = batteryManager != null
+                ? batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+                : Integer.MIN_VALUE;
+        if (currentUa == Integer.MIN_VALUE || currentUa == 0) {
+            return;
+        }
+
+        Intent batteryIntent = mContext.registerReceiver(null,
+                new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        int voltageMv = batteryIntent != null
+                ? batteryIntent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1)
+                : -1;
+        if (voltageMv <= 0) {
+            return;
+        }
+
+        mChargingCurrent = Math.abs(currentUa);
+        mChargingVoltage = voltageMv * 1000;
+        // microvolts * microamps = picowatts; / 1e6 = microwatts.
+        mChargingWattage = mChargingVoltage * mChargingCurrent / 1_000_000f;
+
+        if (!status.oemFastCharging && !status.oemChargeStatus) {
+            final int slowThreshold = mContext.getResources().getInteger(
+                    com.android.settingslib.R.integer.config_chargingSlowlyThreshold);
+            final int fastThresholdRes = com.android.settingslib.fuelgauge.BatteryUtils
+                    .isChargingStringV2Enabled()
+                    ? com.android.settingslib.R.integer.config_chargingFastThreshold_v2
+                    : com.android.settingslib.R.integer.config_chargingFastThreshold;
+            final int fastThreshold = mContext.getResources().getInteger(fastThresholdRes);
+            if (mChargingWattage < slowThreshold) {
+                mChargingSpeed = BatteryStatus.CHARGING_SLOWLY;
+            } else if (mChargingWattage > fastThreshold) {
+                mChargingSpeed = BatteryStatus.CHARGING_FAST;
+            } else {
+                mChargingSpeed = BatteryStatus.CHARGING_REGULAR;
+            }
+        }
+    }
+
     protected String computePowerChargingStringIndication() {
         if (mPowerCharged) {
             return mContext.getResources().getString(R.string.keyguard_charged);
@@ -1655,10 +1712,8 @@ public class KeyguardIndicationController {
             mPowerPluggedInDock = status.isPluggedInDock() && isChargingOrFull;
             mPowerPluggedIn = isPowerPluggedIn(status, isChargingOrFull);
             mPowerCharged = status.isCharged();
-            mChargingCurrent = status.maxChargingCurrent;
-            mChargingVoltage = status.maxChargingVoltage;
-            mChargingWattage = status.maxChargingWattage;
             mChargingSpeed = status.getChargingSpeed(mContext);
+            updateChargingValuesFromBattery(status);
             mChargingStatus = status.chargingStatus;
             mBatteryLevel = status.level;
             mBatteryPresent = status.present;
