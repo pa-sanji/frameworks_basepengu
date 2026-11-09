@@ -321,6 +321,7 @@ public final class ActiveServices {
 
 // QTI_END: 2023-04-06: Core: Add servicetracker AIDl support for service lifecycle event
     private static boolean mIsAIDLSupported = false;
+    private static boolean mHidlServicetrackerUnavailable = false;
     private static final long EXTERNAL_SERVICE_FLAGS = Context.BIND_EXTERNAL_SERVICE_LONG
             | Integer.toUnsignedLong(Context.BIND_EXTERNAL_SERVICE);
 
@@ -941,6 +942,7 @@ public final class ActiveServices {
 
 // QTI_BEGIN: 2019-06-24: Core: Inform Servicetracker HAL about Service Lifecycle events
     private boolean getServicetrackerInstance() {
+        if (mHidlServicetrackerUnavailable) return false;
         if (mServicetracker == null ) {
             try {
                 mServicetracker = IServicetracker.getService(false);
@@ -951,6 +953,7 @@ public final class ActiveServices {
                 return false;
             }
             if (mServicetracker == null) {
+                mHidlServicetrackerUnavailable = true;
                 if (DEBUG_SERVICE) Slog.w(TAG, "servicetracker HIDL not available");
                 return false;
             }
@@ -963,6 +966,9 @@ public final class ActiveServices {
     private boolean getAIDLServicetrackerInstance() {
 // QTI_END: 2023-04-06: Core: Add servicetracker AIDl support for service lifecycle event
 
+        if (!mIsAIDLSupported && ServiceManager.isDeclared(AIDL_SERVICE)) {
+            mIsAIDLSupported = true;
+        }
         if (!mIsAIDLSupported) return false;
 
 // QTI_BEGIN: 2023-04-06: Core: Add servicetracker AIDl support for service lifecycle event
