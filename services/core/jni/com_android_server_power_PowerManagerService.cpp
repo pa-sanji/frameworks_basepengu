@@ -24,8 +24,8 @@
 #include <aidl/android/hardware/power/Mode.h>
 #include <aidl/android/system/suspend/ISystemSuspend.h>
 #include <aidl/android/system/suspend/IWakeLock.h>
-#include <vendor/aospa/power/Feature.h>
-#include <vendor/aospa/power/IPowerFeature.h>
+#include <vendor/neko/power/Feature.h>
+#include <vendor/neko/power/IPowerFeature.h>
 #include <android-base/chrono_utils.h>
 #include <android/binder_manager.h>
 #include <android/system/suspend/ISuspendControlService.h>
@@ -54,8 +54,8 @@ using aidl::android::system::suspend::IWakeLock;
 using aidl::android::system::suspend::WakeLockType;
 using android::String8;
 using android::system::suspend::ISuspendControlService;
-using PowerFeature = vendor::aospa::power::Feature;
-using vendor::aospa::power::IPowerFeature;
+using PowerFeature = vendor::neko::power::Feature;
+using vendor::neko::power::IPowerFeature;
 
 namespace android {
 
