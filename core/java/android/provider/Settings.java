@@ -110,6 +110,7 @@ import android.widget.Editor;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.util.Preconditions;
+import com.android.internal.util.neko.HideDeveloperStatusUtils;
 
 import java.io.IOException;
 import java.lang.annotation.ElementType;
@@ -3849,6 +3850,9 @@ public final class Settings {
         @UnsupportedAppUsage
         public String getStringForUser(ContentResolver cr, String name,
                 final @CanBeCURRENT @UserIdInt int userId) {
+            if (HideDeveloperStatusUtils.shouldHideDevStatus(cr, cr.getPackageName(), name)) {
+                return "0" /* Disabled */;
+            }
             final boolean isSelf = (userId == UserHandle.myUserId());
             final AttributionSource attributionSource = cr.getAttributionSource();
             final int deviceId = android.permission.flags.Flags.deviceAwarePermissionApisEnabled()
@@ -4598,6 +4602,9 @@ public final class Settings {
         @UnsupportedAppUsage
         public static String getStringForUser(ContentResolver resolver, String name,
                 @CanBeCURRENT @UserIdInt int userId) {
+            if (HideDeveloperStatusUtils.shouldHideDevStatus(resolver, resolver.getPackageName(), name)) {
+                return "0" /* Disabled */;
+            }
 // QTI_BEGIN: 2018-04-09: Core: SEEMP: framework instrumentation and AppProtect features
             android.util.SeempLog.record(android.util.SeempLog.getSeempGetApiIdFromValue(name));
 // QTI_END: 2018-04-09: Core: SEEMP: framework instrumentation and AppProtect features
@@ -8487,6 +8494,9 @@ public final class Settings {
         @UnsupportedAppUsage
         public static String getStringForUser(ContentResolver resolver, String name,
                 @CanBeCURRENT @UserIdInt int userId) {
+            if (HideDeveloperStatusUtils.shouldHideDevStatus(resolver, resolver.getPackageName(), name)) {
+                return "0" /* Disabled */;
+            }
             if (MOVED_TO_GLOBAL.contains(name)) {
                 Log.w(TAG, "Setting " + name + " has moved from android.provider.Settings.Secure"
                         + " to android.provider.Settings.Global.");
@@ -8959,6 +8969,14 @@ public final class Settings {
          * @hide
          */
         public static final String CAMERA_AUTOROTATE = "camera_autorotate";
+
+        /**
+         * Comma separated list of packages that should see the developer and ADB
+         * settings reported as disabled.
+         *
+         * @hide
+         */
+        public static final String HIDE_DEVELOPER_STATUS = "hide_developer_status";
 
         /**
          * @deprecated Use {@link android.provider.Settings.Global#DEVELOPMENT_SETTINGS_ENABLED}
@@ -21446,6 +21464,9 @@ public final class Settings {
         @UnsupportedAppUsage(maxTargetSdk = Build.VERSION_CODES.R, trackingBug = 170729553)
         public static String getStringForUser(ContentResolver resolver, String name,
                 int userHandle) {
+            if (HideDeveloperStatusUtils.shouldHideDevStatus(resolver, resolver.getPackageName(), name)) {
+                return "0" /* Disabled */;
+            }
             if (MOVED_TO_SECURE.contains(name)) {
                 Log.w(TAG, "Setting " + name + " has moved from android.provider.Settings.Global"
                         + " to android.provider.Settings.Secure, returning read-only value.");
