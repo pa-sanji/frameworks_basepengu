@@ -762,7 +762,7 @@ public final class PowerManagerService extends SystemService
     private boolean mOneFingerSwipeLeftEnabled;
     private boolean mTwoFingerSwipeEnabled;
 
-    // Power features defined in vendor/pa/interfaces/power/vendor/aospa/power/Feature.aidl.
+    // Power features defined in vendor/aospa/interfaces/power/vendor/neko/power/Feature.aidl.
     private static final int POWER_FEATURE_GESTURES = 0;
     private static final int POWER_FEATURE_DOUBLE_TAP = 1;
     private static final int POWER_FEATURE_DRAW_V = 2;
